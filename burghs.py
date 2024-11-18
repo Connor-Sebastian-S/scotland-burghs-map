@@ -1,9 +1,10 @@
+import os
 import pandas as pd
 from geopy.geocoders import Nominatim
 
-# File paths and constants
-input_file_path = "./burghs/List_of_burghs_in_Scotland_2.csv"
-output_file_path = "./burghs/Updated_List_of_burghs_with_lat_long.csv"
+# Directory containing input CSV files and output consolidated CSV
+input_directory = "./burghs"
+output_file = "./consolidated_burghs.csv"
 
 # Initialize geocoder
 geolocator = Nominatim(user_agent="geo_burgh_locator")
@@ -18,14 +19,28 @@ def fetch_coordinates(location_name):
         print(f"Error fetching coordinates for {location_name}: {e}")
     return None, None
 
-# Read the input CSV
-df = pd.read_csv(input_file_path)
+# Create an empty DataFrame to hold consolidated data
+consolidated_df = pd.DataFrame()
 
-# Clean the "Burgh" column and create "lat" and "long" columns
-df["Burgh_Cleaned"] = df["Burgh"].str.replace(r"(?i)(royal\s*burgh|burgh)", "", regex=True).str.strip()
-df["lat"], df["long"] = zip(*df["Burgh_Cleaned"].apply(fetch_coordinates))
+# Process each CSV file in the input directory
+for file_name in os.listdir(input_directory):
+    if file_name.endswith(".csv"):
+        file_path = os.path.join(input_directory, file_name)
+        
+        # Read the current CSV file
+        print(f"Processing file: {file_name}")
+        df = pd.read_csv(file_path)
 
-# Save the updated dataframe to a new CSV
-df.to_csv(output_file_path, index=False)
+        # Clean the "Burgh" column
+        df["Burgh_Cleaned"] = df["Burgh"].str.replace(r"(?i)(royal\s*burgh|burgh)", "", regex=True).str.strip()
 
-print(f"Updated file saved to {output_file_path}")
+        # Fetch coordinates and add as new columns
+        df["lat"], df["long"] = zip(*df["Burgh_Cleaned"].apply(fetch_coordinates))
+
+        # Append to the consolidated DataFrame
+        consolidated_df = pd.concat([consolidated_df, df], ignore_index=True)
+
+# Save the consolidated DataFrame to a single CSV
+consolidated_df.to_csv(output_file, index=False)
+
+print(f"Consolidated data saved to {output_file}")

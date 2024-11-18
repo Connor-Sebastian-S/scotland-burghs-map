@@ -26,7 +26,7 @@
         }).addTo(map);
 
         // Load GeoJSON data
-        fetch('burghs_data.json')
+        fetch('https://connor-sebastian-s.github.io/scotland-burghs-map//burghs_data.json')
             .then(response => response.json())
             .then(data => {
                 // Add markers to map
