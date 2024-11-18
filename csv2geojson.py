@@ -2,7 +2,7 @@ import pandas as pd
 import json
 
 # Input and output file paths
-csv_file = "./Updated_List_of_burghs_with_lat_long.csv"
+csv_file = "./consolidated_burghs.csv"
 json_file = "./burghs_data.json"
 
 # Read the CSV
