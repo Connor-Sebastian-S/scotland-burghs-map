@@ -3,11 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Burgh Map</title>
+    <title>Burgh Map with Date Colors</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         #map {
             height: 100vh;
+        }
+        .legend {
+            background: white;
+            line-height: 1.5em;
+            padding: 5px;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+        }
+        .legend span {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            margin-right: 5px;
         }
     </style>
 </head>
@@ -25,17 +38,56 @@
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
 
+        // Helper function to convert a date to a color
+        function dateToColor(date, minDate, maxDate) {
+            const dateScale = (new Date(date) - minDate) / (maxDate - minDate); // Normalize date to 0-1 scale
+            const red = Math.floor(255 * (1 - dateScale)); // Newer dates are red
+            const green = Math.floor(255 * dateScale); // Older dates are green
+            return `rgb(${red},${green},0)`;
+        }
+
+        // Add legend
+        const legend = L.control({ position: 'bottomright' });
+        legend.onAdd = function () {
+            const div = L.DomUtil.create('div', 'legend');
+            div.innerHTML = `
+                <div><span style="background: rgb(0,255,0)"></span> Oldest</div>
+                <div><span style="background: rgb(255,0,0)"></span> Newest</div>
+            `;
+            return div;
+        };
+        legend.addTo(map);
+
         // Load GeoJSON data
-        fetch('https://connor-sebastian-s.github.io/scotland-burghs-map//burghs_data.json')
+        fetch('burghs_data.json')
             .then(response => response.json())
             .then(data => {
-                // Add markers to map
+                // Calculate min and max founding dates
+                const dates = data.features
+                    .map(f => new Date(f.properties.Date))
+                    .filter(d => !isNaN(d)); // Filter out invalid dates
+                const minDate = new Date(Math.min(...dates));
+                const maxDate = new Date(Math.max(...dates));
+
+                // Add markers to the map
                 data.features.forEach(feature => {
                     const { geometry, properties } = feature;
-                    const marker = L.marker([geometry.coordinates[1], geometry.coordinates[0]]).addTo(map);
+                    const { Date } = properties;
 
-                    // Create popup content with other data
-                    const popupContent = Object.keys(properties).map(key => 
+                    // Convert date to color
+                    const markerColor = dateToColor(Date, minDate, maxDate);
+
+                    // Create a colored marker
+                    const marker = L.circleMarker([geometry.coordinates[1], geometry.coordinates[0]], {
+                        radius: 8,
+                        fillColor: markerColor,
+                        color: "#000",
+                        weight: 1,
+                        fillOpacity: 0.8
+                    }).addTo(map);
+
+                    // Bind popup content
+                    const popupContent = Object.keys(properties).map(key =>
                         `<strong>${key}</strong>: ${properties[key]}`
                     ).join('<br>');
                     marker.bindPopup(popupContent);
