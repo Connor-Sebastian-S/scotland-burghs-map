@@ -8,8 +8,8 @@ json_file = "./burghs_data.json"
 # Read the CSV
 df = pd.read_csv(csv_file)
 
-# Replace NaN or empty values with empty strings
-df = df.fillna("")
+# Replace NaN or non-JSON compatible values with empty strings
+df = df.fillna("").replace({pd.NA: "", pd.NaT: "", None: ""})
 
 # Convert to GeoJSON (Leaflet-friendly format)
 geojson_data = {
