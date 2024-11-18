@@ -8,7 +8,10 @@ json_file = "./burghs_data.json"
 # Read the CSV
 df = pd.read_csv(csv_file)
 
-# Convert to JSON (for Leaflet-friendly format)
+# Replace NaN or empty values with empty strings
+df = df.fillna("")
+
+# Convert to GeoJSON (Leaflet-friendly format)
 geojson_data = {
     "type": "FeatureCollection",
     "features": []
