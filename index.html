@@ -3,25 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Burgh Map with Date Colors</title>
+    <title>Burgh Map with Gradient Date Colors</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         #map {
             height: 100vh;
         }
         .legend {
-            background: white;
-            line-height: 1.5em;
-            padding: 5px;
-            border-radius: 5px;
-            box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
-        }
-        .legend span {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            margin-right: 5px;
-        }
+        background: white;
+        line-height: 1.5em;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+        width: 200px;
+    }
+    .legend .gradient {
+        width: 100%;
+        height: 20px;
+        background: linear-gradient(to right, rgb(0, 255, 0), rgb(255, 0, 0)); /* Green to Red */
+        margin: 10px 0;
+    }
+    .legend .labels {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+    }
+    .legend div {
+        margin-bottom: 10px;
+    }
+	
+	.overlay-box {
+        background-color: white;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+        font-size: 12px;
+        max-width: 250px;
+        line-height: 1.5em;
+    }
     </style>
 </head>
 <body>
@@ -37,6 +56,29 @@
             maxZoom: 19,
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
+		
+		// Add a custom control for the overlay box
+    const infoBox = L.control({ position: 'topright' });
+
+    infoBox.onAdd = function () {
+        // Create a div with the class 'overlay-box'
+        const div = L.DomUtil.create('div', 'overlay-box');
+        div.innerHTML = `
+            <h4>Map Information</h4>
+            <p>This map shows the locations of various burghs in Scotland.</p>
+            <p>Markers are colour-coded by founding year:</p>
+            <ul>
+                <li><strong>Green:</strong> Oldest burghs</li>
+                <li><strong>Red:</strong> Newest burghs</li>
+                <li><strong>White:</strong> Unknown date</li>
+            </ul>
+			<p>Click a point to learn more about that burgh.</p>
+			<p>The dates that define colour are the earliest known date that the area was known as a 'burgh'.</p>
+        `;
+        return div;
+    };
+
+    infoBox.addTo(map);
 
         // Helper function to convert a date to a color
         function dateToColor(date, minDate, maxDate) {
@@ -46,54 +88,105 @@
             return `rgb(${red},${green},0)`;
         }
 
-        // Add legend
+        // Add gradient legend
         const legend = L.control({ position: 'bottomright' });
         legend.onAdd = function () {
             const div = L.DomUtil.create('div', 'legend');
             div.innerHTML = `
-                <div><span style="background: rgb(0,255,0)"></span> Oldest</div>
-                <div><span style="background: rgb(255,0,0)"></span> Newest</div>
+                <div>Burgh Founding Date</div>
+                <div class="gradient"></div>
+                <div class="labels">
+                    <span id="minDate"></span>
+                    <span id="maxDate"></span>
+                </div>
             `;
             return div;
         };
         legend.addTo(map);
 
-        // Load GeoJSON data
-        fetch('burghs_data.json')
-            .then(response => response.json())
-            .then(data => {
-                // Calculate min and max founding dates
-                const dates = data.features
-                    .map(f => new Date(f.properties.Date))
-                    .filter(d => !isNaN(d)); // Filter out invalid dates
-                const minDate = new Date(Math.min(...dates));
-                const maxDate = new Date(Math.max(...dates));
-
-                // Add markers to the map
-                data.features.forEach(feature => {
-                    const { geometry, properties } = feature;
-                    const { Date } = properties;
-
-                    // Convert date to color
-                    const markerColor = dateToColor(Date, minDate, maxDate);
-
-                    // Create a colored marker
-                    const marker = L.circleMarker([geometry.coordinates[1], geometry.coordinates[0]], {
-                        radius: 8,
-                        fillColor: markerColor,
-                        color: "#000",
-                        weight: 1,
-                        fillOpacity: 0.8
-                    }).addTo(map);
-
-                    // Bind popup content
-                    const popupContent = Object.keys(properties).map(key =>
-                        `<strong>${key}</strong>: ${properties[key]}`
-                    ).join('<br>');
-                    marker.bindPopup(popupContent);
-                });
+       fetch('https://connor-sebastian-s.github.io/scotland-burghs-map//burghs_data.json')
+    .then(response => response.json())
+    .then(data => {
+        // Parse dates from the "Date" property, assuming YYYY format
+        const dates = data.features
+            .map(f => {
+                const year = f.properties.Date;
+                if (!year) return null; // Handle missing or undefined dates
+                const date = new Date(`${year}-01-01`); // Convert year to ISO format
+                return isNaN(date) ? null : date; // Exclude invalid dates
             })
-            .catch(err => console.error('Error loading GeoJSON:', err));
+            .filter(d => d); // Remove nulls
+
+        if (dates.length === 0) {
+            console.error("No valid dates found in data.");
+            return;
+        }
+
+        // Calculate min and max founding dates
+        const minDate = new Date(Math.min(...dates));
+        const maxDate = new Date(Math.max(...dates));
+
+        // Update main legend with min and max years
+        document.getElementById('minDate').innerText = minDate.getFullYear();
+        document.getElementById('maxDate').innerText = maxDate.getFullYear();
+
+        // Add markers to the map
+        data.features.forEach(feature => {
+            const { geometry, properties } = feature;
+            const { Date } = properties;
+
+            // Determine marker color
+            let markerColor;
+            if (!Date) {
+                // Assign white color for unknown dates
+                markerColor = "white";
+            } else {
+                // Convert known dates to a color
+                const year = Date;
+                markerColor = dateToColor(`${year}-01-01`, minDate, maxDate);
+            }
+
+            // Create a colored marker
+            const marker = L.circleMarker([geometry.coordinates[1], geometry.coordinates[0]], {
+                radius: 8,
+                fillColor: markerColor,
+                color: "#000",
+                weight: 1,
+                fillOpacity: 0.8
+            }).addTo(map);
+
+            // Bind popup content
+            const popupContent = Object.keys(properties).map(key =>
+                `<strong>${key}</strong>: ${properties[key]}`
+            ).join('<br>');
+            marker.bindPopup(popupContent);
+        });
+
+        // Add stacked legends
+        const stackedLegends = L.control({ position: 'bottomright' });
+        stackedLegends.onAdd = function () {
+            const div = L.DomUtil.create('div', 'legend');
+            div.innerHTML = `
+                <div>
+                    <div>Unknown Founding Date</div>
+                    <div style="display: inline-block; width: 100%; height: 20px; background: white; border: 1px solid black; margin-bottom: 10px;"></div>
+                </div>
+
+            `;
+            return div;
+        };
+        stackedLegends.addTo(map);
+    })
+    .catch(err => console.error('Error loading GeoJSON:', err));
+
+// Helper function to convert a date to a color
+function dateToColor(date, minDate, maxDate) {
+    const dateScale = (new Date(date) - minDate) / (maxDate - minDate); // Normalize date to 0-1 scale
+    const red = Math.floor(255 * dateScale); // Newer dates are red
+    const green = Math.floor(255 * (1 - dateScale)); // Older dates are green
+    return `rgb(${red},${green},0)`;
+}
+
     </script>
 </body>
 </html>
